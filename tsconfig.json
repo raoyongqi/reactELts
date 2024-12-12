@@ -8,7 +8,9 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true 
+    "skipLibCheck": true,
+    "outDir": "./build",           
+    "rootDir": "./src",  
   },
 
 }

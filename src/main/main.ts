@@ -1,35 +1,68 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow ,dialog} from 'electron';
 import * as path from 'path';
 import process from 'process';
+import installExtension, {
+  REACT_DEVELOPER_TOOLS,
+  REDUX_DEVTOOLS,
+} from 'electron-devtools-installer';
+import { initBridge } from './bridge';
+import { configureLog4js, reportCrash } from './log';
 
-function createWindow(): void {
-  const win = new BrowserWindow({
+async function main() {
+  await app.whenReady();
+  initBridge();
+  const  win = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
-      nodeIntegration: true,
+        preload: path.join(__dirname, '..', 'main', 'preload.js'),  // 指定 preload 文件
+        contextIsolation: true,  // 启用上下文隔离
+        nodeIntegration: false,  // 禁用 Node.js 集成
     },
-  });
+    frame: false,
+});
 
-  // 在 Vite 开发模式下加载 Vite 提供的开发服务器地址
-  win.loadURL('http://localhost:5173/');
+win.removeMenu();
+
+if (app.requestSingleInstanceLock()) {
+    app.on('second-instance', () => {
+      if (win.isMinimized()) {
+        win.restore();
+      }
+      win.focus();
+    });
+  } else {
+    // 第二个实例，退出。
+    app.quit();
+    return;
+  }
+  if (process.env.NODE_ENV === 'development') {
+    await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS]);
+    win.once('show', () => win.webContents.openDevTools());
+    // 开发环境加载开发服务器 URL
+    await win.loadURL('http://localhost:5173');
+  } else {
+    await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  }
 }
 
-// 应用启动时创建窗口
-app.whenReady().then(() => {
-  createWindow();
 
-  app.on('activate', () => {
-    // macOS 中点击 Dock 图标时，如果没有窗口打开，则重新创建窗口
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
 
-// 所有窗口关闭时退出应用（除 macOS 外）
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+async function crash(err: Error) {
+const crashFilePath = await reportCrash({
+name: err.name,
+message: err.message,
+stack: err.stack,
 });
+dialog.showErrorBox(
+'程序出现了错误',
+`${err.message}\n崩溃报告位置：${crashFilePath}`
+);
+process.exit(-1);
+}
+
+
+main().catch(crash);
+
+process.on('uncaughtException', crash);
