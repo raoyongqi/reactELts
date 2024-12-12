@@ -1,9 +1,10 @@
+
 declare global {
   interface Window {
     electronAPI: {
       saveFile: (content: string) => Promise<string>;
       readFile: () => Promise<string>;
-      fetchPlaylistTracks: (listId: string, cookie: string) => Promise<any[]>;  // 添加 fetchPlaylistTracks
+      fetchPlaylistTracks: (listId: string, cookie: string) => Promise<{ [key: string]: any }>;
     };
   }
 }
