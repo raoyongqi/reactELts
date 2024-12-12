@@ -7,7 +7,6 @@ import installExtension, {
 } from 'electron-devtools-installer';
 import { initBridge } from './bridge';
 import { configureLog4js, reportCrash } from './log';
-
 async function main() {
   await app.whenReady();
   initBridge();
@@ -36,8 +35,12 @@ if (app.requestSingleInstanceLock()) {
     app.quit();
     return;
   }
+
+  win.once('ready-to-show', () => win.show());
+  
   if (process.env.NODE_ENV === 'development') {
-    await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS]);
+    await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS]).then((name) => console.log(`Added Extension:  ${name}`))
+    .catch((err) => console.log('An error occurred: ', err));
     win.once('show', () => win.webContents.openDevTools());
     // 开发环境加载开发服务器 URL
     await win.loadURL('http://localhost:5173');
@@ -45,6 +48,8 @@ if (app.requestSingleInstanceLock()) {
     await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   }
+
+  app.on('window-all-closed', () => app.quit());
 }
 
 

@@ -2,6 +2,8 @@ import { ipcMain } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import Music from 'NeteaseCloudMusicApi';
+import { ParseList } from './types';
 
 export function initBridge() {
     ipcMain.handle('save-file', (event, content) => {
@@ -30,4 +32,34 @@ export function initBridge() {
         } else {
             throw new Error('文件不存在');
         }
-});}
+
+
+});
+
+ipcMain.handle('fetch-playlist-tracks', async (_, listId, cookie) => {
+    return getPlaylistTracks(listId, cookie);
+    });
+
+  }
+
+  async function getPlaylistTracks(listId: string, cookie: string): Promise<ParseList[]> {
+    try {
+            
+      const songs = await Music.playlist_track_all({ id: listId, cookie })
+        .then((res) => {
+          console.log(`Response from API:`, res.body);  // 打印响应内容，看看返回的数据
+          return res.body.songs as Record<string, any>[];
+        })
+        .then((songs) =>
+          songs.map(({ name, ar, id }) => ({
+            id,
+            name: `${name} - ${(ar?.[0]?.name || 'Unknown Artist')}`,
+          }))
+        );
+      return songs;
+    } catch (error) {
+      console.error('Error fetching playlist tracks:', error);
+      return [];
+    }
+  }
+  
