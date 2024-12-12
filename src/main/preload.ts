@@ -6,4 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: () => ipcRenderer.invoke('read-file'),
   fetchPlaylistTracks: (listId: string, cookie: string) =>
     ipcRenderer.invoke('fetch-playlist-tracks', listId, cookie),
+  saveTrackInfo: (trackName: string, trackLyrics: string) => {
+    return ipcRenderer.invoke('saveTrackInfo', trackName, trackLyrics);
+  },
 });

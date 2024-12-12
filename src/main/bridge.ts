@@ -4,6 +4,9 @@ import path from 'path';
 import os from 'os';
 import Music from 'NeteaseCloudMusicApi';
 import { ParseList,Lrc } from './types';
+import { app } from 'electron'; // Ensure you import the app module if it's not already
+
+
 
 export function initBridge() {
     ipcMain.handle('save-file', (event, content) => {
@@ -36,11 +39,37 @@ export function initBridge() {
 
 });
 
-ipcMain.handle('fetch-playlist-tracks', async (_, listId, cookie) => {
-    return getPlaylistTracks(listId, cookie);
-    });
 
+
+
+ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
+  const saveDir = path.join(os.homedir(), 'Music', 'lyrics'); // Path to save the lyrics folder
+  const savePath = path.join(saveDir, `${trackName}.txt`); // Full path to the file
+  const content = `Track Name: ${trackName}\n\nLyrics:\n${trackLyrics}`;
+
+  // Ensure the directory exists; if not, create it
+  try {
+    // Create the directory if it doesn't exist (recursive option ensures all parent dirs are created)
+    fs.mkdirSync(saveDir, { recursive: true });
+
+    // Write the content to the file
+    fs.writeFileSync(savePath, content, 'utf-8');
+
+    return savePath; // Return the saved file path
+  } catch (error) {
+    console.error('Error saving file:', error);
+    throw error; // If saving fails, throw an error
   }
+});
+
+  ipcMain.handle('fetch-playlist-tracks', async (_, listId, cookie) => {
+      return getPlaylistTracks(listId, cookie);
+      });
+
+    }
+
+
+    
   async function getPlaylistTracks(listId: string, cookie: string):  Promise<{ [key: string]: any }> {
     try {
       // 获取播放列表中的歌曲
@@ -91,3 +120,6 @@ ipcMain.handle('fetch-playlist-tracks', async (_, listId, cookie) => {
       return "Error fetching lyrics";
     }
   }
+
+
+  
