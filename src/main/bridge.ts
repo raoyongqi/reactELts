@@ -4,7 +4,6 @@ import path from 'path';
 import os from 'os';
 import Music from 'NeteaseCloudMusicApi';
 import { ParseList,Lrc } from './types';
-import { app } from 'electron'; // Ensure you import the app module if it's not already
 
 
 
@@ -43,7 +42,8 @@ export function initBridge() {
 
 
 ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
-  const saveDir = path.join(os.homedir(), 'Music', 'lyrics'); // Path to save the lyrics folder
+  const safeTrackName = trackName.replace(/[\\\/:*?"<>|]/g, ''); // 去掉不合法的字符
+  const saveDir = path.join(os.homedir(), 'Music', 'lyrics', safeTrackName); // Path to save the lyrics folder
   const savePath = path.join(saveDir, `${trackName}.txt`); // Full path to the file
   const content = `Track Name: ${trackName}\n\nLyrics:\n${trackLyrics}`;
 
@@ -69,7 +69,6 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
     }
 
 
-    
   async function getPlaylistTracks(listId: string, cookie: string):  Promise<{ [key: string]: any }> {
     try {
       // 获取播放列表中的歌曲
@@ -87,12 +86,28 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
       
       // 获取第一首歌的歌词
       let firstTrackLyrics = '';
-      if (songs.length > 0) {
-        const firstTrackId = songs[0].id;
-        firstTrackLyrics = await getLyrics(firstTrackId); // 获取歌词
+      let firstDownloadUrl = '';
+      let firstSong = null; // 记录找到的最后一首有效歌曲
+      
+      // 遍历 songs 寻找第一首有有效下载链接的歌曲
+      for (const song of songs) {
+        const trackId = song.id;
+        const downloadUrl = await getDownloadUrl(trackId, cookie);
+        
+        if (downloadUrl) { // 检查 downloadUrl 是否有效
+          firstDownloadUrl = downloadUrl;
+          firstTrackLyrics = await getLyrics(trackId); // 获取歌词
+          firstSong = song;  // 记录当前歌曲名称
+          break; // 找到后立即退出循环
+        }
       }
-
-      return { name: songs[0], lyric:firstTrackLyrics };
+      
+      if (!firstDownloadUrl) {
+        console.log('No valid download URL found in the provided songs.');
+      }
+      
+      return { song: firstSong, lyric: firstTrackLyrics, url: firstDownloadUrl };
+      
     } catch (error) {
       return { tracks: [], firstTrackLyrics: 'Failed to fetch lyrics.' };
     }
@@ -121,5 +136,44 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
     }
   }
 
+// Function to get the download URL of a song
+async function getDownloadUrl(songId: string, cookie: string): Promise<string | null> {
+  try {
+    // Fetch the download URL using the songId and cookie
+    const res = await Music.song_download_url({ id: songId, cookie });
 
-  
+    // Extract the download URL from the response
+    const downloadUrl = (res.body.data as any).url;
+    if (downloadUrl) {
+      return downloadUrl; // Return the download URL if available
+    } else {
+      return null; // Return null if downloadUrl is not available
+    }
+  } catch (error) {
+    console.error('Error fetching download URL:', error);
+    throw error;
+  }
+}
+
+
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+
+    https.get(url, (response) => {
+      if (response.statusCode === 200) {
+        response.pipe(file);
+      } else {
+        reject(new Error(`Failed to download file, status code: ${response.statusCode}`));
+      }
+
+      file.on('finish', () => {
+        file.close(resolve);
+      });
+
+      file.on('error', (err) => {
+        fs.unlink(destPath, () => reject(err)); // 删除文件
+      });
+    });
+  });
+}
