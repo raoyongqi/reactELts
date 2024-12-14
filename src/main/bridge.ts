@@ -4,8 +4,8 @@ import path from 'path';
 import os from 'os';
 import Music from 'NeteaseCloudMusicApi';
 import { ParseList,Lrc } from './types';
-
-
+import {downloadFile} from './download';
+import { clear, log } from 'node:console'
 
 export function initBridge() {
     ipcMain.handle('save-file', (event, content) => {
@@ -35,16 +35,34 @@ export function initBridge() {
             throw new Error('文件不存在');
         }
 
+// 在主进程中处理 Electron 渲染进程的 IPC 调用
 
+});
+
+
+ipcMain.handle('downloadTrackFromUrl', async (event, trackName: string, url: string) => {
+  
+    const safeTrackName = trackName.replace(/[\\\/:*?"<>|]/g, ''); // 去掉不合法的字符
+    const saveDir = path.join(os.homedir(), 'Music', 'lyrics', safeTrackName); // Path to save the lyrics folder
+  try {
+    await downloadFile(url,saveDir, trackName); // 调用下载函数
+    return trackName; // 返回下载路径
+  } catch (error) {
+    // 将 error 转换为 Error 类型
+    const err = error instanceof Error ? error : new Error(String(error));
+    throw new Error(`Failed to download track: ${err.message}`);
+  }
 });
 
 
 
 
-ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
+ipcMain.handle('saveTrackInfo', async (event,trackID, trackName, trackLyrics) => {
   const safeTrackName = trackName.replace(/[\\\/:*?"<>|]/g, ''); // 去掉不合法的字符
   const saveDir = path.join(os.homedir(), 'Music', 'lyrics', safeTrackName); // Path to save the lyrics folder
   const savePath = path.join(saveDir, `${trackName}.txt`); // Full path to the file
+  const saveIDPath = path.join(saveDir, `id.txt`); // Full path to the file
+
   const content = `Track Name: ${trackName}\n\nLyrics:\n${trackLyrics}`;
 
   // Ensure the directory exists; if not, create it
@@ -54,6 +72,7 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
 
     // Write the content to the file
     fs.writeFileSync(savePath, content, 'utf-8');
+    fs.writeFileSync(saveIDPath, trackID.toString(), 'utf-8');
 
     return savePath; // Return the saved file path
   } catch (error) {
@@ -64,9 +83,10 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
 
   ipcMain.handle('fetch-playlist-tracks', async (_, listId, cookie) => {
       return getPlaylistTracks(listId, cookie);
-      });
 
-    }
+    });
+
+    };
 
 
   async function getPlaylistTracks(listId: string, cookie: string):  Promise<{ [key: string]: any }> {
@@ -83,14 +103,20 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
             name: `${name} - ${(ar?.[0]?.name || 'Unknown Artist')}`,
           }))
         );
-      
+        
       // 获取第一首歌的歌词
       let firstTrackLyrics = '';
-      let firstDownloadUrl = '';
+      let firstDownloadUrl =null;
       let firstSong = null; // 记录找到的最后一首有效歌曲
       
-      // 遍历 songs 寻找第一首有有效下载链接的歌曲
-      for (const song of songs) {
+      let count = 0; // 初始化计数器
+      const startFrom = 105; // 从第 105 首歌曲开始查找，索引从 0 开始
+      
+      for (let i = startFrom; i < songs.length; i++) {
+        const song = songs[i];
+        count++; // 每遍历一首歌计数器加1
+        log(`正在处理第 ${count + startFrom} 首歌曲: ${song.name || '未知'}`); // 计算真实歌曲编号
+        
         const trackId = song.id;
         const downloadUrl = await getDownloadUrl(trackId, cookie);
         
@@ -98,9 +124,11 @@ ipcMain.handle('saveTrackInfo', async (event, trackName, trackLyrics) => {
           firstDownloadUrl = downloadUrl;
           firstTrackLyrics = await getLyrics(trackId); // 获取歌词
           firstSong = song;  // 记录当前歌曲名称
+          log(`找到有效的歌曲链接，第 ${count + startFrom} 首: ${song.name || '未知'}`);
           break; // 找到后立即退出循环
         }
       }
+      
       
       if (!firstDownloadUrl) {
         console.log('No valid download URL found in the provided songs.');
@@ -153,27 +181,4 @@ async function getDownloadUrl(songId: string, cookie: string): Promise<string | 
     console.error('Error fetching download URL:', error);
     throw error;
   }
-}
-
-
-function downloadFile(url, destPath) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
-
-    https.get(url, (response) => {
-      if (response.statusCode === 200) {
-        response.pipe(file);
-      } else {
-        reject(new Error(`Failed to download file, status code: ${response.statusCode}`));
-      }
-
-      file.on('finish', () => {
-        file.close(resolve);
-      });
-
-      file.on('error', (err) => {
-        fs.unlink(destPath, () => reject(err)); // 删除文件
-      });
-    });
-  });
 }

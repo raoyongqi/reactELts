@@ -5,7 +5,7 @@ declare global {
       saveFile: (content: string) => Promise<string>;
       readFile: () => Promise<string>;
       fetchPlaylistTracks: (listId: string, cookie: string) => Promise<{ [key: string]: any }>;
-      saveTrackInfo: (trackName: string, trackLyrics: string) => Promise<string>;
+      saveTrackInfo: (trackName: string,trackID : string,trackLyrics: string) => Promise<string>;
       downloadTrackFromUrl: (url: string, downloadPath: string) => Promise<string>;
     };
   }

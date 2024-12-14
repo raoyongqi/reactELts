@@ -1,29 +1,20 @@
-import https from 'https';
+import axios from 'axios';
 import fs from 'fs';
+import path from 'path';
 
+export async function downloadFile(url: string, downloadDir: string, name: string) {
+  const res = await axios({
+    method: 'GET',
+    url,
+    responseType: 'stream', // 将响应设置为流
+  });
 
+  // 将下载内容写入本地文件
+  const writer = res.data.pipe(fs.createWriteStream(path.join(downloadDir, `${name}.mp3`)));
 
-
-// 为函数的参数添加类型注解
-function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
-
-    https.get(url, (response) => {
-      if (response.statusCode === 200) {
-        response.pipe(file);
-      } else {
-        reject(new Error(`Failed to download file, status code: ${response.statusCode}`));
-      }
-
-      file.on('finish', () => {
-        file.close(() => resolve()); // 确保在文件关闭时解析 Promise
-      });
-
-      file.on('error', (err: NodeJS.ErrnoException) => {
-        fs.unlink(destPath, () => reject(err)); // 删除文件
-      });
-    });
+    writer.on('finish', resolve); // 文件保存完成
+    writer.on('error', reject);   // 发生错误
   });
 }
 

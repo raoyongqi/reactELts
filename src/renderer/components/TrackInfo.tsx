@@ -60,10 +60,10 @@ const [trackID, setTrackID] = useState<string>('');
     }
 
     try {
-      const filePath = await window.electronAPI.saveTrackInfo(trackName, trackLyrics);
+      const filePath = await window.electronAPI.saveTrackInfo(trackID,trackName, trackLyrics);
 
           // 调用主进程下载文件
-    await window.electronAPI.downloadTrackFromUrl(trackName,trackUrl);
+      await window.electronAPI.downloadTrackFromUrl(trackName,trackUrl);
       alert(`File saved successfully at ${filePath}`);
     } catch (error) {
       console.error('Error saving track info:', error);
